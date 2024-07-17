@@ -5,10 +5,27 @@ use anchor_lang::solana_program::clock::UnixTimestamp;
 
 declare_id!("3bgJ8TjDebaWM9PRZXLFoviajmunXPGdbWwYBxVsGdme");
 
-const STAKE_AMOUNT: u64 = 72_000_000;
+const STAKE_AMOUNT: u64 = 36_000_000;
 // const ADMIN_KEY: Pubkey = Pubkey::from_str("Ah2XCFjHK9kPKuqB2FYYZpwTfE882kzzGdNFRZJ6Go4w").unwrap();
 const ADMIN_KEY: &str = "Ah2XCFjHK9kPKuqB2FYYZpwTfE882kzzGdNFRZJ6Go4w";
 const TOKEN_MINT: &str = "Bckayy6RpSsBxC2wZKXKeNMVAAnvJeZT23U7DW4CDdAa";
+const SECONDS_IN_YEAR: u64 = 31_540_000;
+const APR: u64 = 10;
+const PERCENT_AMOUNT: u64 = 100;
+
+
+pub fn calculate_rewards(stake: &Stake) -> u64 {
+    let time_now = Clock::get().unwrap().unix_timestamp;
+    let difference = (time_now - stake.start) as u64;
+    // let difference = 864000;
+    //
+    // msg!("It is time_now - {}, it is stake_start - {}", time_now, stake.start);
+    //
+    // msg!("It is first - {}", difference * stake.amount * APR);
+    // msg!("It is divider - {}", SECONDS_IN_YEAR * PERCENT_AMOUNT);
+
+    (difference * stake.amount * APR) / (SECONDS_IN_YEAR * PERCENT_AMOUNT)
+}
 
 #[program]
 pub mod spl_transfer_pda {
@@ -129,31 +146,32 @@ pub mod spl_transfer_pda {
             mint: ctx.accounts.mint_of_token_being_sent.to_account_info()
         };
 
-        let bump = ctx.bumps.app_wallet;
-        let binding = [bump];
-        let seed: Vec<&[u8]> = vec![
-            b"app_wallet",
-            &binding
-        ];
-
-        let outer = vec![seed.as_slice()];
-        let reward_cpi_ctx = CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            reward_instruction,
-            outer.as_slice()
-        );
-
-        // calculate stake value
-        let reward_value: u64 = 10;
+        let reward_value = calculate_rewards(&ctx.accounts.stake);
         if ctx.accounts.app_wallet.amount < reward_value {
             return Ok(());
         }
 
-        anchor_spl::token::transfer_checked(
-          reward_cpi_ctx,
-          reward_value,
-          ctx.accounts.mint_of_token_being_sent.decimals
-        )?;
+        if reward_value > 0 {
+            let bump = ctx.bumps.app_wallet;
+            let binding = [bump];
+            let seed: Vec<&[u8]> = vec![
+                b"app_wallet",
+                &binding
+            ];
+
+            let outer = vec![seed.as_slice()];
+            let reward_cpi_ctx = CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                reward_instruction,
+                outer.as_slice()
+            );
+
+            anchor_spl::token::transfer_checked(
+                reward_cpi_ctx,
+                reward_value,
+                ctx.accounts.mint_of_token_being_sent.decimals
+            )?;
+        }
 
         ctx.accounts.stake.amount = 0;
 

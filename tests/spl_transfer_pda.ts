@@ -166,10 +166,11 @@ describe("spl_transfer_pda", () => {
   })
 
   it("withdraw", async () => {
+      await new Promise(f => setTimeout(f, 3000));
     const beforeBalance = await provider.connection.getTokenAccountBalance(fromAta.address);
     console.log("Before balance - ", beforeBalance.value.amount);
 
-    await program.methods
+    let result = await program.methods
       .withdraw()
       .accounts({
           mintOfTokenBeingSent: mintPubKey,
@@ -181,6 +182,11 @@ describe("spl_transfer_pda", () => {
       })
       .signers([fromWallet])
       .rpc();
+
+      await new Promise(f => setTimeout(f, 3000));
+
+    const info = await provider.connection.getParsedTransaction(result, "confirmed");
+    console.log("Tx info - ", info.meta.logMessages);
 
     let afterBalance = await provider.connection.getTokenAccountBalance(fromAta.address);
     console.log("After balance - ", afterBalance.value.amount);
